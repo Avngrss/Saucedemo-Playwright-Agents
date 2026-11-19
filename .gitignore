@@ -1,0 +1,49 @@
+
+# Playwright
+node_modules/
+test-results/
+playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+.auth/
+state/
+*.storage-state.json
+.playwright-mcp/
+# Claude Code: each person's own settings (the kit's are in .claude/)
+.claude/settings.local.json
+.env
+.env.uat
+# Allure generated output (the config is allurerc.mjs at the root, tracked)
+reports/allure/results/
+reports/allure/html/
+allure-results/
+allure-report/
+.scannerwork/
+.sonarlint/
+sonar-project.properties
+.vscode/
+
+# Temporary agent discovery/debug artifacts
+discover-*-output.json
+scripts/debug-*.mjs
+scripts/discover-*.mjs
+scripts/scratch-*.mjs
+
+reports/allure/history.jsonl
+.playwright-cli/
+# Readable run summary (written by every run)
+reports/run-summary.md
+reports/run-summary.json
+# Each test's last result, merged by every run (scripts/agent/suite-coverage.mjs reads it)
+reports/last-results.json
+# Lines a verify cut off left spoiled (npm run verify -- --restore puts them back)
+reports/verify-spoils.json
+# The last verify's result and its automatic-heal attempt (an agent's stop hook reads it)
+reports/verify-state.json
+# The test result verify writes for the summary (scripts/agent/test-result.mjs)
+reports/test-result.md
+# What the stop hook last checked, its runs and its lock (scripts/agent/stop-check.mjs)
+reports/stop-check.json
+reports/stop-check.log
+reports/stop-check.lock

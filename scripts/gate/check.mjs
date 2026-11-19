@@ -1,0 +1,54 @@
+/**
+ * qa:gate — the suite's conventions, checked before every commit (`npm run qa:gate`, then tsc). Every
+ * problem is listed at once and says how to fix it; warnings never fail the gate. The rules live by
+ * topic in this folder (scripts/gate/):
+ *   patterns.mjs  one-line rules: what specs, Page Objects, clients and all test code may not do; no state at a
+ *                 file's top level that its tests share
+ *   layout.mjs    where plans, specs and support code live
+ *   specs.mjs     tags and scope, quarantine reasons, hooks, mocks, case links, a skeleton spec:draft left
+ *   support.mjs   the fixture chain, roles from the map, a sweep for every disposable fixture
+ *   models.mjs    Page Objects and components: size, state, second names, unused members, siblings repeating their base
+ *   repeats.mjs   the same thing twice: copied lines, the same code in two apps, a scenario automated twice
+ *   cases.mjs     a manual case automated whole or not at all: every scenario of it with its test; a Blocked one says where
+ *                 the tests looked; browsers, phone and screenshots decided
+ *   routes.mjs    one scenario, one owner, one test, proven as its route says (docs/Layer Routing Algorithm.md); a plan
+ *                 says what its owner check found — an app with an API never left without API scenarios unsaid
+ *   reading.mjs   a UI test reads as its case: no data shaped in the spec, a step is one action and its checks
+ *   pointers.mjs  every rule and skill the code names exists in agents/, never in an agent's own copy
+ *   agents.mjs    every agent's copy (.cursor/, .claude/, .mcp.json) matches agents/ — npm run agents:sync writes them
+ *   leftovers.mjs a temporary artifact left behind: a debug, discovery, scratch or probe file
+ *   advice.mjs    warnings: size, readability
+ */
+import fs from "node:fs";
+import path from "node:path";
+import { adviceRules } from "./advice.mjs";
+import { agentRules } from "./agents.mjs";
+import { caseRules } from "./cases.mjs";
+import { collectFiles, createReport, ROOT } from "./context.mjs";
+import { layoutRules } from "./layout.mjs";
+import { leftoverRules } from "./leftovers.mjs";
+import { patternRules } from "./patterns.mjs";
+import { repeatRules } from "./repeats.mjs";
+import { specRules } from "./specs.mjs";
+import { supportRules } from "./support.mjs";
+import { modelRules } from "./models.mjs";
+import { readingRules } from "./reading.mjs";
+import { routeRules } from "./routes.mjs";
+import { pointerRules } from "./pointers.mjs";
+
+const files = collectFiles();
+const report = createReport();
+// A cut-off `npm run verify` leaves its spoiled lines listed here: a test checking a wrong value is never committed.
+if (fs.existsSync(path.join(ROOT, "reports", "verify-spoils.json")))
+  report.fail(null, "reports/verify-spoils.json — a cut-off `npm run verify` left spoiled lines in the specs: `npm run verify -- --restore` puts them back");
+for (const rule of [...patternRules, ...layoutRules, ...specRules, ...supportRules, ...modelRules, ...repeatRules, ...caseRules, ...routeRules, ...readingRules, ...pointerRules, ...agentRules, ...leftoverRules, ...adviceRules]) rule(files, report);
+
+console.log(`qa:gate — ${files.specs.length} spec(s), ${files.support.length} support file(s)`);
+for (const warning of report.warnings) console.log(`! ${warning}`);
+for (const failure of report.failures) console.log(`✗ ${failure}`);
+
+if (report.failures.length > 0) {
+  console.log(`\n${report.failures.length} problem(s) — fix them and run the gate again.`);
+  process.exit(1);
+}
+console.log(`\nConventions hold${report.warnings.length ? ` (${report.warnings.length} warning(s) to weigh)` : ""}.`);

@@ -1,0 +1,77 @@
+---
+description: The project map (specs/project-map.md) and the test home's layout — folders per app, area and feature, app boundaries, apps and their URLs, tenants, npm run help for the npm scripts, Playwright projects, CI
+alwaysApply: true
+---
+
+# Project map and layout
+
+**`specs/project-map.md` is the single source of truth** — read by the code, `qa:gate` and the scripts:
+apps and their `.env` URL names, each app's ```auth block (its optional `tenants:` line too), external systems,
+app-wide behaviour, TMS case links, the tracker queue, allowed tags, shared-state locks. Read it before planning or writing tests. Edit
+only the section that changes (search first, never a second entry; names only, never a value), new `.env`
+names via `npm run env:prepare`, then `npm run qa:gate` (+ `test:list` after Apps, `auth:check` after Auth).
+Beside it: `specs/known-bugs.md` (`plans.md`), `docs/test-strategy.md`.
+
+## Layout — the same for one app or ten
+
+`<app>` = a `Platform` slug of §Apps and services; `<area>` = a product area grouping features (`account`);
+`<feature>` = one feature, tab or section (`addresses`); E2E has no feature level — a journey crosses
+features of one area. `qa:gate` (`layout.mjs`) fails any other place, depth or name.
+
+| What | Where |
+|---|---|
+| plan / E2E journey plan | `specs/<app>/<area>/<feature>/<feature>.md` / `specs/e2e/<app>/<area>/<journey>.md` |
+| API / UI spec | `tests/<api\|ui>/<app>/<area>/<feature>/<feature>.<api\|ui>.spec.ts` |
+| E2E spec | `tests/e2e/<app>/<area>/<journey>.e2e.spec.ts`, named after its outcome |
+| smoke | only the template's `tests/smoke/sign-in.smoke.spec.ts` |
+| Page Objects / components | `src/pages/<app>/*.page.ts` / `src/components/<app>/*.component.ts` (a design system several apps share: `src/components/<library>/`) |
+| API clients | `src/api/clients/<app>/<area>.client.ts` |
+| data | `src/data/builders/<app>/*.builder.ts`, `src/data/generators\|datasets/<app\|shared>/*.generator\|dataset.ts`, `src/data/sweeps.ts` |
+| assertions / setup | `src/assertions/<app\|shared>/*.ts` / `src/setup/<app>/*.ts` |
+| an app's fixtures | `src/fixtures/<app>/{data.fixture.ts,pages.fixture.ts,test.ts}` |
+| reporting, logging, security / sessions | `src/reporting/`, `src/logging/`, `src/security/` / only the git-ignored `state/` |
+
+- Folders are kebab-case, by feature (tickets are links in the plan), never generic (`misc`, `common`,
+  `shared`, `all`, `other`, `temp`, `helpers`, `tests`). A plan and its specs share the slugs; a file is named
+  after its folder (`<feature>…`, or `<feature>-<more>…` for a second file), never a second folder for one
+  feature. One plan per page or request set. Reuse the app's existing slugs. Visual baselines stay next to
+  their spec (`<spec>-snapshots/`).
+- Files are kebab-case with the kind as suffix (`.page.ts`, `.component.ts`, `.client.ts`, `.builder.ts`,
+  `.generator.ts`, `.dataset.ts`, `.fixture.ts`); Page Object classes end in `Page`, components are named
+  after the block (`OrderTable`), a client is one function per API area (`ordersApi(request, headers)`).
+  Imports are root-relative (`src/…`), never `../../..` from specs.
+- No `utils/`, `helpers/`, `common/`, `schemas/`, `domain/` or any folder outside the layout; cross-page
+  flows stay in the spec, each page through its own Page Object. A domain-flow layer is a template change
+  proposed to the kit's owner, never added in a project — only when one cross-page workflow repeats in many
+  specs, Page Objects start calling unrelated pages, or fixtures start running business scenarios.
+
+## Apps
+
+- Each app has its own rows, `.env` names, ```auth block, fixtures, folders, projects, report label and tag —
+  adding one changes nothing of another. First app `UI_BASE_URL` / `API_BASE_URL`, further `<APP>_UI_URL` /
+  `<APP>_API_URL`; never an invented env name, never an API URL derived from a UI URL. A needed app or
+  service missing → ask its name and env URL name once. Its Swagger/OpenAPI URL (Docs column) is the primary
+  contract source — none → what the user gives, never an invented docs URL.
+- A new app: rows → `npm run app:add -- <app>` → its sign-in → its values (`env:prepare`). A spec's folder
+  decides its app: its project sets `platform`, and `baseURL`, `page`, `apiRequestContext`, `authHeaders`
+  follow it — specs never read env.
+- Code of one app imports only its own app's code and the shared folders; shared code imports no app's code.
+  One app per test: a journey that must cross two apps is its case's *Not now* `Blocked`, naming both.
+- An app whose tenants (stores, projects, organisations) each account lists gets the optional `tenants: GET
+  <path> → <id field>, <name field>` line in its ```auth block — `npm run stand:find` searches each of them.
+
+## npm scripts
+
+`npm run help` lists every script with its arguments and what it does (`npm run help -- <word>` for some); each
+skill names the script its step needs. After an edit of `agents/` (a rule, skill, command, `mcp.json`):
+`npm run agents:sync` — never edit a copy in `.cursor/`, `.claude/` or `.github/`.
+
+## Playwright projects and CI
+
+`playwright.config.ts` builds them per app from the map: `smoke:<app>` (sign-in smoke; the app's other
+projects wait for it, so a dead stand stops only that app), `api:<app>`, `ui:<app>` (desktop Chrome
+1280×720), `e2e:<app>`, and for tagged UI tests only `firefox:<app>`, `webkit:<app>` (`@cross-browser`),
+`mobile:<app>` (Pixel 5, `@responsive`); no `:<app>` before the first app. Any other project is a config
+change the user approves. CI (`.github/workflows/playwright.yml` or `ci/gitlab/gitlab-ci.yml`) reads URLs and
+accounts from CI variables with the map's `.env` names; `env:prepare` adds a new name to GitHub's workflow and
+prints what the user creates in the repository settings — the summary passes that line on.

@@ -1,0 +1,65 @@
+{
+  "name": "saucedemo-playwright-agents",
+  "version": "0.1.0",
+  "description": "Playwright tests written with an AI agent — from the Playwright AI Workflow Kit 1.6.0",
+  "private": true,
+  "scripts": {
+    "test:visual": "node scripts/run-tests.mjs visual",
+    "test:cross-browser": "node scripts/run-tests.mjs cross-browser",
+    "test:responsive": "node scripts/run-tests.mjs responsive",
+    "browsers:install:all": "npx playwright install",
+    "postinstall": "node scripts/run-tests.mjs --browsers",
+    "test": "node scripts/run-tests.mjs all",
+    "test:list": "npx playwright test --list --reporter=list --pass-with-no-tests",
+    "test:api": "node scripts/run-tests.mjs api",
+    "test:ui": "node scripts/run-tests.mjs ui",
+    "test:e2e": "node scripts/run-tests.mjs e2e",
+    "test:smoke": "node scripts/run-tests.mjs smoke",
+    "test:app": "node scripts/run-tests.mjs app",
+    "test:regression": "node scripts/run-tests.mjs regression",
+    "data:sweep": "npx playwright test --grep @data-sweep-only --pass-with-no-tests --reporter=null",
+    "auth:check": "node scripts/auth.mjs check",
+    "auth:sign-in": "node scripts/auth.mjs sign-in",
+    "suite:coverage": "node scripts/agent/suite-coverage.mjs",
+    "verify": "node scripts/agent/verify.mjs",
+    "plan:block": "node scripts/agent/plan-block.mjs",
+    "plan:confirm": "node scripts/agent/plan-confirm.mjs",
+    "spec:draft": "node scripts/agent/spec-draft.mjs",
+    "stand:find": "node scripts/agent/stand-find.mjs",
+    "env:prepare": "node scripts/agent/prepare-env.mjs",
+    "app:add": "node scripts/agent/add-app.mjs",
+    "api:types": "node scripts/agent/api-types.mjs",
+    "agents:sync": "node scripts/agent/agents-sync.mjs",
+    "agents:use": "node scripts/agent/agents-use.mjs",
+    "help": "node scripts/agent/help.mjs",
+    "test:flaky": "node scripts/run-tests.mjs flaky",
+    "test:failed": "node scripts/run-tests.mjs failed",
+    "browsers:install": "npx playwright install chromium",
+    "typecheck": "tsc --noEmit",
+    "qa:gate": "node scripts/gate/check.mjs && npm run typecheck",
+    "allure:report": "allure generate reports/allure/results --output reports/allure/html",
+    "allure:open": "allure open reports/allure/results"
+  },
+  "type": "commonjs",
+  "devDependencies": {
+    "@playwright/mcp": "^0.0.75",
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^26.6.3",
+    "allure": "^3.19.0",
+    "allure-playwright": "^3.13.0",
+    "dotenv": "^18.0.4",
+    "openapi-typescript": "6.7.6",
+    "typescript": "^7.0.2",
+    "zod": "4.6.7"
+  },
+  "overrides": {
+    "dompurify": "3.4.17",
+    "openapi-typescript": {
+      "undici": "6.29.1"
+    }
+  },
+  "playwrightAiKit": {
+    "version": "1.6.0",
+    "commit": "6892e6cbdf4e3b649421f039ee999b52a8c173ac"
+  }
+}

@@ -1,0 +1,195 @@
+name: Playwright Starter CI
+
+# The tests live at the repository's root — installed by the Playwright AI Workflow Kit.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  # Actions → this workflow → Run workflow on a branch: the Linux screenshot baselines of its @visual tests, written
+  # here (CI runs Linux; a baseline approved on Windows or a Mac is not one) and committed to that branch.
+  workflow_dispatch:
+    inputs:
+      baselines:
+        description: "Screenshot baselines to write: missing — only those not there yet; all — also those that differ (approves the look the run sees)"
+        type: choice
+        options: [missing, all]
+        default: missing
+
+# GitHub passes only what is named here (Settings → Secrets and variables → Actions): add every .env name of
+# specs/project-map.md — vars.<NAME> for addresses, secrets.<NAME> for logins, passwords and keys
+# (e.g. SHOP_LOGIN: ${{ secrets.SHOP_LOGIN }}). Empty when unset. Every job reads them.
+env:
+  UI_BASE_URL: ${{ vars.UI_BASE_URL || '' }}
+  API_BASE_URL: ${{ vars.API_BASE_URL || '' }}
+
+# A new push to the same branch cancels the run still going — no stale run left spinning.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  baseline:
+    name: Baseline Gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      has_tests: ${{ steps.detect-tests.outputs.has_tests }}
+      playwright: ${{ steps.playwright.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The secret scan reads the commits of the push or the pull request — they must be in the clone.
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      # The test jobs run in the Playwright image of this exact version — its browsers match, nothing is downloaded.
+      - name: Read the Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+      - name: Run quality gate
+        run: npm run qa:gate
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify Playwright test discovery
+        run: npm run test:list
+      - name: Detect test files
+        id: detect-tests
+        shell: bash
+        run: |
+          shopt -s globstar nullglob
+          # Feature tests only — the template's sign-in smoke is there from the start.
+          files=(tests/api/**/*.spec.ts tests/ui/**/*.spec.ts tests/e2e/**/*.spec.ts)
+          if (( ${#files[@]} > 0 )); then
+            echo "has_tests=true" >> "$GITHUB_OUTPUT"
+            echo "Detected ${#files[@]} feature test file(s)"
+          else
+            echo "has_tests=false" >> "$GITHUB_OUTPUT"
+            echo "No feature tests yet; matrix jobs will be skipped."
+          fi
+
+  matrix-tests:
+    name: ${{ matrix.name }}
+    needs: baseline
+    if: needs.baseline.outputs.has_tests == 'true' && github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    container:
+      image: mcr.microsoft.com/playwright:v${{ needs.baseline.outputs.playwright }}-noble
+      options: --user 1001
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Functional Smoke
+            command: npm run test:smoke
+          - name: Functional Regression
+            command: npm run test:regression
+          - name: Visual
+            command: npm run test:visual
+          - name: Cross-Browser Chromium
+            command: npx playwright test --project="ui*" --grep @cross-browser --grep-invert "@wip|@flaky" --pass-with-no-tests
+          - name: Cross-Browser Firefox
+            command: npx playwright test --project="firefox*" --grep @cross-browser --grep-invert "@wip|@flaky" --pass-with-no-tests
+          - name: Cross-Browser WebKit
+            command: npx playwright test --project="webkit*" --grep @cross-browser --grep-invert "@wip|@flaky" --pass-with-no-tests
+          - name: Responsive Mobile Chromium
+            command: npx playwright test --project="mobile*" --grep @responsive --grep-invert "@wip|@flaky" --pass-with-no-tests
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run matrix command
+        run: ${{ matrix.command }}
+      - name: Generate Allure report
+        if: always() && hashFiles('reports/allure/results/**') != ''
+        run: npm run allure:report
+      - name: Upload Playwright HTML report
+        if: always() && hashFiles('playwright-report/**') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-${{ matrix.name }}
+          path: playwright-report/
+          retention-days: 14
+      - name: Upload Playwright test results
+        if: always() && hashFiles('test-results/**') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ matrix.name }}
+          path: test-results/
+          retention-days: 14
+      - name: Upload Allure results
+        if: always() && hashFiles('reports/allure/results/**') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: allure-results-${{ matrix.name }}
+          path: reports/allure/results/
+          retention-days: 14
+      - name: Upload Allure report
+        if: always() && hashFiles('reports/allure/html/**') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: allure-report-${{ matrix.name }}
+          path: reports/allure/html/
+          retention-days: 14
+      # The run's summary — every failure by its verdict and the next step; a triage of this run reads it.
+      - name: Upload run summary
+        if: always() && hashFiles('reports/run-summary.md', 'reports/run-summary.json') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: run-summary-${{ matrix.name }}
+          path: |
+            reports/run-summary.md
+            reports/run-summary.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  visual-baselines:
+    name: Visual Baselines (Linux)
+    needs: baseline
+    if: github.event_name == 'workflow_dispatch' && needs.baseline.outputs.has_tests == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    # The same image as the Visual job: a baseline compares only with screenshots rendered where it was made.
+    container:
+      image: mcr.microsoft.com/playwright:v${{ needs.baseline.outputs.playwright }}-noble
+      options: --user 1001
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Write the screenshot baselines
+        run: npx playwright test --grep @visual --grep-invert "@wip|@flaky" --update-snapshots=${{ inputs.baselines }} --pass-with-no-tests
+      # A push with this token starts no other run: push again, or re-run the checks, to see them green.
+      - name: Commit the baselines to the branch
+        shell: bash
+        run: |
+          git add -A -- '*-linux.png'
+          if git diff --cached --quiet; then echo "No Linux baseline to add or change."; exit 0; fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Screenshot baselines for Linux (@visual, ${{ inputs.baselines }})"
+          git push
+      - name: Upload the baselines
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-baselines-linux
+          path: tests/**/*-linux.png
+          if-no-files-found: ignore
+          retention-days: 14
