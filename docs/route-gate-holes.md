@@ -1,6 +1,15 @@
-# Plan gate holes — API excuse and a screen torn off its intercept
+# Kit holes — the route gate, and the sandbox browser download
 
-Working note for the kit fix. The search plan below is the example. Do not implement it as it stands.
+Working note for the kit fix. Two separate problems. Both are global: every user of this kit hits them. The Toolshop search plan is only the example that showed the first one. Do not implement that plan as it stands.
+
+## Global, not a one-off
+
+The routing algorithm itself decides the right owner. The gate that enforces it does not. `scripts/gate/routes.mjs` accepts any three-word excuse after `contract:` and any `intercept` followed by a later `screen-only`. So this is not a bad plan of one feature.
+
+- Every plan of an app that has an API can hide a second contract call in a parenthesis and stay green.
+- Every multi-step TMS case whose last step is "look at the screen" can tear that screen off the intercept and stay green.
+
+The next agent stops when `qa:gate` is green. Until the two checks below exist, the algorithm for the agent ends at the shape of the line.
 
 Plan: `specs/toolshop/products/search-field/search-field.md`
 Stand: Toolshop, `https://practicesoftwaretesting.com`, API `https://api.practicesoftwaretesting.com`
@@ -80,6 +89,24 @@ Prose alone will not stop the next plan. The agent stopped when the gate was gre
 
 After the rule edit, refresh this plan before any test is written. The two UI cases stay. Step 5's screen tokens join step 4. `GET /products/search` becomes a Gap, not a third test, unless someone decides to cover it.
 
+## Sandbox downloads Chromium on every agent install
+
+Also global, and unrelated to the routes. Any person who runs this kit's `npm install` from a Cursor agent chat downloads Chromium again, even when that exact build is already on the machine.
+
+Cursor's command sandbox sets `PLAYWRIGHT_BROWSERS_PATH` to an empty folder:
+
+```text
+C:\Users\Avngr\AppData\Local\Temp\cursor-sandbox-cache\<hash>\playwright
+```
+
+The hash changes with the sandbox. The folder starts empty (`.links`, `__dirlock`). The kit's `postinstall` is `node scripts/run-tests.mjs --browsers`, which calls `ensureBrowsers()`. `browsersDirectory()` in that file trusts `PLAYWRIGHT_BROWSERS_PATH` whenever it is set, so the required `chromium-1248` and `chromium_headless_shell-1248` look missing and `npx playwright install chromium` runs.
+
+The browsers Playwright actually uses are not in `node_modules`. On Windows they live in `%LOCALAPPDATA%\ms-playwright`. This machine already had `chromium-1248` and `chromium_headless_shell-1248` there (Playwright 1.64.1, Chrome for Testing 156.0.8078.4). A sandboxed install does not look at that cache. One observed run downloaded Chrome 197.5 MiB and the headless shell 118.1 MiB into the temp folder, then ffmpeg. The next chat with another sandbox hash downloads them again.
+
+A terminal outside the sandbox does not set the variable, so a person's own `npm install` does not do this. Setting `PLAYWRIGHT_BROWSERS_PATH` in the user environment does not win: the sandbox overwrites it. `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` stops the download and leaves tests looking in the empty folder, so they fail with a missing executable.
+
+This copy already drops the sandbox path before the check, in `scripts/run-tests.mjs` and `playwright.config.ts` (`delete` when the value includes `cursor-sandbox-cache`). Checked with the variable pointed at a folder that does not exist: `node scripts/run-tests.mjs --browsers --check` printed `ready: chromium-1248, chromium_headless_shell-1248` and created nothing. Those two lines are not in the kit other people install until they are in the source those people clone. A raw `npx playwright install` from a sandboxed chat still downloads, because it never loads those files.
+
 ## Sources checked
 
 - Plan file above, including the empty `## Not now` and the API brief.
@@ -87,3 +114,4 @@ After the rule edit, refresh this plan before any test is written. The two UI ca
 - Live contract `https://api.practicesoftwaretesting.com/docs?api-docs.json`: `/products/search` has `GET` (`q`, `page` in the query) and `QUERY` (body).
 - Gate: `scripts/gate/routes.mjs` `checkOwners` and `checkPlanRoutes`.
 - Rules: `docs/Layer Routing Algorithm.md` §5–§7, `agents/rules/plans.md` (owner check, route table, Gap).
+- Sandbox: a running `npm install` in another chat logged `Playwright needs chromium-1248, chromium_headless_shell-1248 in …\Temp\cursor-sandbox-cache\…\playwright` and downloaded there. The same builds were already in `%LOCALAPPDATA%\ms-playwright`. `scripts/run-tests.mjs` `browsersDirectory()` / `ensureBrowsers()`, `package.json` `postinstall`.
